@@ -1,9 +1,11 @@
 import streamlit as st
 import google.generativeai as genai
+from google import genai as genai_client
 from PIL import Image
 import time
 from datetime import datetime
 import json
+import io
 
 # --- Page Configuration ---
 st.set_page_config(
@@ -405,6 +407,8 @@ if 'api_calls_count' not in st.session_state:
     st.session_state.api_calls_count = 0
 if 'img_description' not in st.session_state:
     st.session_state.img_description = ''
+if 'last_image_gen_time' not in st.session_state:
+    st.session_state.last_image_gen_time = 0
 
 # --- Helper Functions ---
 def safe_generate(prompt, model):
@@ -490,6 +494,55 @@ def split_dialogue(text, max_words=15):
         clips.append(" ".join(current))
     
     return clips
+
+def generate_image_ai(prompt, api_key, number_of_images=1):
+    """Generate images using Imagen 4.0 model"""
+    try:
+        # Create client with API key
+        client = genai_client.Client(api_key=api_key)
+        
+        # Add a small delay to avoid rate limiting
+        time.sleep(2)
+        
+        # Generate images using Imagen 4.0
+        from google.genai import types
+        
+        response = client.models.generate_images(
+            model='imagen-4.0-generate-001',
+            prompt=prompt,
+            config=types.GenerateImagesConfig(
+                number_of_images=number_of_images,
+            )
+        )
+        
+        # Extract all generated images
+        if response.generated_images and len(response.generated_images) > 0:
+            images = [img.image for img in response.generated_images]
+            st.session_state.api_calls_count += 1
+            return images, None
+        
+        return None, "No images generated in response"
+        
+    except Exception as e:
+        error_msg = str(e)
+        
+        # Detailed error logging for debugging
+        print(f"Full error: {error_msg}")
+        
+        if "429" in error_msg or "ResourceExhausted" in error_msg or "RESOURCE_EXHAUSTED" in error_msg:
+            return None, "⏳ Rate limit. Wait 60 seconds and try again."
+        elif "quota" in error_msg.lower() or "QUOTA" in error_msg:
+            return None, "💳 API quota exceeded. Check your quota at ai.google.dev"
+        elif "invalid" in error_msg.lower() or "API_KEY_INVALID" in error_msg:
+            return None, "🔑 Invalid API key for image generation."
+        elif "not found" in error_msg.lower() or "NOT_FOUND" in error_msg:
+            return None, "⚠️ Model 'imagen-4.0-generate-001' not found. Make sure it's enabled for your API key."
+        elif "permission" in error_msg.lower() or "PERMISSION_DENIED" in error_msg:
+            return None, "🚫 No permission to use Imagen. Check API settings."
+        elif "FAILED_PRECONDITION" in error_msg:
+            return None, "⚠️ Imagen 4.0 not available in your region yet. Try again later."
+        else:
+            return None, f"⚠️ Error: {error_msg}"
 
 # --- LOGIN PAGE ---
 if not st.session_state.logged_in:
@@ -658,8 +711,12 @@ st.markdown("""
             <div>Video Prompts</div>
         </div>
         <div class="hero-feature">
+            <span class="hero-feature-icon">🎨</span>
+            <div>AI Image Creator</div>
+        </div>
+        <div class="hero-feature">
             <span class="hero-feature-icon">🖼️</span>
-            <div>Image Generation</div>
+            <div>Image Prompts</div>
         </div>
         <div class="hero-feature">
             <span class="hero-feature-icon">🚀</span>
@@ -670,9 +727,10 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # --- TABS ---
-tab1, tab2, tab3, tab4 = st.tabs([
+tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "📝 Script Doctor",
     "🎬 Video Generator",
+    "🎨 AI Image Creator",
     "🖼️ Image Prompts",
     "🚀 Viral Manager"
 ])
@@ -859,8 +917,272 @@ Production-ready format."""
             else:
                 st.error("⚠️ Please provide character description and script")
 
-# === TAB 3: IMAGE PROMPTS ===
+# === TAB 3: AI IMAGE CREATOR ===
 with tab3:
+    st.markdown("### 🎨 AI Image Creator")
+    
+    if is_demo:
+        st.info("🎮 **Demo Mode** - Image generation requires a real API key. Please login to use this feature.")
+    
+    col1, col2 = st.columns([1, 1], gap="large")
+    
+    with col1:
+        st.markdown("#### 💭 Describe Your Image")
+        
+        image_prompt = st.text_area(
+            "What do you want to create?",
+            height=200,
+            placeholder="Example: A cute cat wearing sunglasses sitting on a beach during sunset, photorealistic style, 4K quality",
+            help="Be detailed and specific for best results",
+            key="ai_image_prompt"
+        )
+        
+        col_style, col_quality = st.columns(2)
+        
+        with col_style:
+            art_style = st.selectbox(
+                "Art Style",
+                [
+                    "Photorealistic",
+                    "Digital Art",
+                    "Oil Painting",
+                    "Anime/Manga",
+                    "3D Render",
+                    "Watercolor",
+                    "Pencil Sketch",
+                    "Cyberpunk",
+                    "Fantasy Art"
+                ],
+                key="art_style_select"
+            )
+        
+        with col_quality:
+            quality = st.selectbox(
+                "Quality",
+                ["Standard", "High Quality", "Ultra HD 4K"],
+                index=1,
+                key="quality_select"
+            )
+        
+        # Aspect ratio
+        aspect_ratio = st.selectbox(
+            "Aspect Ratio",
+            ["1:1 Square", "16:9 Landscape", "9:16 Portrait", "4:3 Classic", "3:2 Photo"],
+            key="aspect_select"
+        )
+        
+        # Number of images
+        num_images = st.selectbox(
+            "Number of Images",
+            [1, 2, 3, 4],
+            index=0,
+            help="Generate multiple variations at once",
+            key="num_images_select"
+        )
+        
+        # Additional options
+        with st.expander("⚙️ Advanced Options", expanded=False):
+            mood = st.selectbox(
+                "Mood/Atmosphere",
+                ["Natural", "Dramatic", "Cheerful", "Dark/Moody", "Dreamy", "Vibrant"],
+                key="mood_select"
+            )
+            
+            lighting = st.selectbox(
+                "Lighting",
+                ["Natural", "Golden Hour", "Studio", "Neon", "Dramatic", "Soft"],
+                key="lighting_select"
+            )
+            
+            add_details = st.text_input(
+                "Additional Details (optional)",
+                placeholder="e.g., bokeh effect, lens flare, HDR...",
+                key="add_details_input"
+            )
+        
+        generate_img_btn = st.button(
+            "🎨 Generate Image",
+            type="primary",
+            use_container_width=True,
+            disabled=is_demo,
+            key="generate_image_btn"
+        )
+        
+        # Show cooldown timer if needed
+        current_time = time.time()
+        time_since_last = current_time - st.session_state.last_image_gen_time
+        cooldown_time = 3  # 3 seconds cooldown
+        
+        if time_since_last < cooldown_time:
+            remaining = int(cooldown_time - time_since_last)
+            st.info(f"⏰ Please wait {remaining} seconds before generating again...")
+    
+    with col2:
+        st.markdown("#### 🖼️ Generated Image")
+        
+        if generate_img_btn:
+            # Check cooldown
+            current_time = time.time()
+            time_since_last = current_time - st.session_state.last_image_gen_time
+            
+            if time_since_last < 3:
+                st.warning(f"⏰ Please wait {int(3 - time_since_last)} more seconds...")
+            elif image_prompt.strip():
+                # Build enhanced prompt
+                enhanced_prompt = f"{image_prompt}"
+                
+                if art_style != "Photorealistic":
+                    enhanced_prompt += f", {art_style} style"
+                
+                enhanced_prompt += f", {aspect_ratio.split()[0]} aspect ratio"
+                
+                if quality == "High Quality":
+                    enhanced_prompt += ", high quality, detailed"
+                elif quality == "Ultra HD 4K":
+                    enhanced_prompt += ", ultra HD 4K, extremely detailed, professional"
+                
+                if mood != "Natural":
+                    enhanced_prompt += f", {mood.lower()} atmosphere"
+                
+                if lighting != "Natural":
+                    enhanced_prompt += f", {lighting.lower()} lighting"
+                
+                if add_details:
+                    enhanced_prompt += f", {add_details}"
+                
+                # Show what we're generating
+                with st.expander("📋 Full Prompt Being Used", expanded=False):
+                    st.code(enhanced_prompt, language="text")
+                
+                # Generate image
+                st.session_state.last_image_gen_time = time.time()
+                
+                with st.spinner(f"🎨 Creating {num_images} image(s)... This may take 10-30 seconds..."):
+                    generated_images, error = generate_image_ai(enhanced_prompt, st.session_state.api_key, num_images)
+                    
+                    if generated_images:
+                        st.success(f"✅ {len(generated_images)} image(s) generated successfully!")
+                        
+                        # Display all images
+                        if len(generated_images) == 1:
+                            st.image(generated_images[0], use_container_width=True, caption="Generated Image")
+                            
+                            # Save to bytes for download
+                            img_bytes = io.BytesIO()
+                            generated_images[0].save(img_bytes, format='PNG')
+                            img_bytes.seek(0)
+                            
+                            # Download button
+                            st.download_button(
+                                "📥 Download Image",
+                                data=img_bytes,
+                                file_name=f"ai_generated_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png",
+                                mime="image/png",
+                                use_container_width=True
+                            )
+                        else:
+                            # Display multiple images in grid
+                            cols = st.columns(2)
+                            for idx, img in enumerate(generated_images):
+                                with cols[idx % 2]:
+                                    st.image(img, use_container_width=True, caption=f"Variation {idx + 1}")
+                                    
+                                    # Individual download button
+                                    img_bytes = io.BytesIO()
+                                    img.save(img_bytes, format='PNG')
+                                    img_bytes.seek(0)
+                                    
+                                    st.download_button(
+                                        f"📥 Download #{idx + 1}",
+                                        data=img_bytes,
+                                        file_name=f"ai_generated_{idx+1}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png",
+                                        mime="image/png",
+                                        use_container_width=True,
+                                        key=f"download_{idx}"
+                                    )
+                        
+                        # Option to regenerate
+                        st.markdown("---")
+                        if st.button("🔄 Generate More", use_container_width=True):
+                            st.rerun()
+                        
+                    else:
+                        st.error(f"❌ {error}")
+                        
+                        # Detailed troubleshooting based on error
+                        if "Rate limit" in error or "quota" in error.lower():
+                            st.warning("""
+                            **Rate Limit Solutions:**
+                            
+                            ⏰ **Wait 60 seconds** and try again
+                            
+                            📊 Check your usage at [Google AI Studio](https://aistudio.google.com/apikey)
+                            
+                            💡 Free tier has limits - upgrade if needed
+                            """)
+                        
+                        elif "not found" in error.lower() or "not available" in error.lower():
+                            st.info("""
+                            **Model Access Issue:**
+                            
+                            The `imagen-4.0-generate-001` model may not be available yet.
+                            
+                            ✅ Check model availability at [ai.google.dev](https://ai.google.dev)
+                            
+                            ✅ Make sure your API key has Imagen access enabled
+                            
+                            ✅ Model might be in limited preview - try again later
+                            """)
+                        
+                        elif "permission" in error.lower():
+                            st.info("""
+                            **Permission Issue:**
+                            
+                            Your API key might not have permission for image generation.
+                            
+                            ✅ Visit [Google AI Studio](https://aistudio.google.com)
+                            
+                            ✅ Check if image generation is enabled for your project
+                            
+                            ✅ You may need to enable additional APIs
+                            """)
+                        
+                        # Show raw error in expander
+                        with st.expander("🔧 Technical Details"):
+                            st.code(error, language="text")
+            else:
+                st.warning("⚠️ Please describe what you want to create")
+        else:
+            # Placeholder
+            st.markdown("""
+            <div style='background: #f8f9fa; padding: 3rem 2rem; border-radius: 14px; text-align: center;'>
+                <div style='font-size: 4em; margin-bottom: 1rem;'>🎨</div>
+                <p style='color: #64748b; margin: 0; font-size: 1.1em;'>
+                    Describe your image and click<br>
+                    <strong>Generate Image</strong>
+                </p>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            # Example prompts
+            st.markdown("---")
+            st.markdown("**💡 Example Prompts:**")
+            
+            examples = [
+                "🏔️ Mountain landscape at sunrise with clouds",
+                "🤖 Futuristic robot in cyberpunk city",
+                "🐱 Cute kitten playing with yarn ball",
+                "🌸 Beautiful garden with cherry blossoms",
+                "🚀 Spaceship traveling through galaxy"
+            ]
+            
+            for example in examples:
+                if st.button(example, key=f"ex_{example}", use_container_width=True):
+                    st.session_state.ai_image_prompt = example.split(" ", 1)[1]
+                    st.rerun()
+
+# === TAB 4: IMAGE PROMPTS ===
+with tab4:
     col1, col2 = st.columns(2, gap="large")
     
     with col1:
@@ -933,8 +1255,8 @@ Format for Midjourney/DALL-E/Stable Diffusion"""
             else:
                 st.warning("⚠️ Please describe your image idea")
 
-# === TAB 4: VIRAL MANAGER ===
-with tab4:
+# === TAB 5: VIRAL MANAGER ===
+with tab5:
     col1, col2 = st.columns(2, gap="large")
     
     with col1:
