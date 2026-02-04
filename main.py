@@ -5,7 +5,10 @@ from PIL import Image
 import time
 from datetime import datetime
 import json
+<<<<<<< HEAD
 import io
+=======
+>>>>>>> b8635aa8bf5a929da6732146c8eab2c484d17ff2
 
 # --- Page Configuration ---
 st.set_page_config(
@@ -407,8 +410,11 @@ if 'api_calls_count' not in st.session_state:
     st.session_state.api_calls_count = 0
 if 'img_description' not in st.session_state:
     st.session_state.img_description = ''
+<<<<<<< HEAD
 if 'last_image_gen_time' not in st.session_state:
     st.session_state.last_image_gen_time = 0
+=======
+>>>>>>> b8635aa8bf5a929da6732146c8eab2c484d17ff2
 
 # --- Helper Functions ---
 def safe_generate(prompt, model):
@@ -495,6 +501,7 @@ def split_dialogue(text, max_words=15):
     
     return clips
 
+<<<<<<< HEAD
 def generate_image_ai(prompt, api_key, number_of_images=1):
     """Generate images using Imagen 4.0 model"""
     try:
@@ -544,6 +551,8 @@ def generate_image_ai(prompt, api_key, number_of_images=1):
         else:
             return None, f"⚠️ Error: {error_msg}"
 
+=======
+>>>>>>> b8635aa8bf5a929da6732146c8eab2c484d17ff2
 # --- LOGIN PAGE ---
 if not st.session_state.logged_in:
     st.markdown("""
@@ -711,12 +720,17 @@ st.markdown("""
             <div>Video Prompts</div>
         </div>
         <div class="hero-feature">
+<<<<<<< HEAD
             <span class="hero-feature-icon">🎨</span>
             <div>AI Image Creator</div>
         </div>
         <div class="hero-feature">
             <span class="hero-feature-icon">🖼️</span>
             <div>Image Prompts</div>
+=======
+            <span class="hero-feature-icon">🖼️</span>
+            <div>Image Generation</div>
+>>>>>>> b8635aa8bf5a929da6732146c8eab2c484d17ff2
         </div>
         <div class="hero-feature">
             <span class="hero-feature-icon">🚀</span>
@@ -727,10 +741,16 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # --- TABS ---
+<<<<<<< HEAD
 tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "📝 Script Doctor",
     "🎬 Video Generator",
     "🎨 AI Image Creator",
+=======
+tab1, tab2, tab3, tab4 = st.tabs([
+    "📝 Script Doctor",
+    "🎬 Video Generator",
+>>>>>>> b8635aa8bf5a929da6732146c8eab2c484d17ff2
     "🖼️ Image Prompts",
     "🚀 Viral Manager"
 ])
@@ -917,6 +937,7 @@ Production-ready format."""
             else:
                 st.error("⚠️ Please provide character description and script")
 
+<<<<<<< HEAD
 # === TAB 3: AI IMAGE CREATOR ===
 with tab3:
     st.markdown("### 🎨 AI Image Creator")
@@ -1290,6 +1311,117 @@ with tab5:
     with col2:
         st.markdown("### 💎 Viral Package")
         
+=======
+# === TAB 3: IMAGE PROMPTS ===
+with tab3:
+    col1, col2 = st.columns(2, gap="large")
+    
+    with col1:
+        st.markdown("### 💭 Your Vision")
+        
+        idea = st.text_area(
+            "Describe your image",
+            height=250,
+            placeholder="Example: A futuristic city at sunset...",
+            key="image_idea"
+        )
+        
+        col_ar, col_det = st.columns(2)
+        with col_ar:
+            aspect = st.selectbox(
+                "Aspect Ratio",
+                ["1:1 Square", "16:9 Landscape", "9:16 Portrait", "4:3 Classic"]
+            )
+        
+        with col_det:
+            detail = st.selectbox(
+                "Detail Level",
+                ["High Detail", "Medium Detail", "Simple/Minimalist"]
+            )
+        
+        img_style = st.selectbox(
+            "Visual Style",
+            ["🎯 Photorealistic", "🎨 Digital Art", "🖼️ Oil Painting", "✨ Anime/Manga"]
+        )
+        
+        create_btn = st.button("✨ Create Prompt", type="primary", use_container_width=True)
+    
+    with col2:
+        st.markdown("### 🎨 Generated Prompt")
+        
+        if create_btn:
+            if idea.strip():
+                with st.spinner("🤖 Creating prompt..."):
+                    prompt = f"""Create professional image generation prompt:
+
+Vision: {idea}
+Style: {img_style}
+Aspect: {aspect}
+Detail: {detail}
+
+Include:
+- Main subject
+- Composition
+- Lighting
+- Color palette
+- Technical specs
+- Style keywords
+
+Format for Midjourney/DALL-E/Stable Diffusion"""
+                    
+                    result = safe_generate(prompt, model)
+                    
+                    if result and "Error" not in result:
+                        st.success("✅ Prompt created!")
+                        st.code(result, language="text")
+                        
+                        st.download_button(
+                            "📥 Download Prompt",
+                            data=result,
+                            file_name=f"image_prompt_{datetime.now().strftime('%Y%m%d_%H%M')}.txt",
+                            use_container_width=True
+                        )
+                    else:
+                        st.error(result)
+            else:
+                st.warning("⚠️ Please describe your image idea")
+
+# === TAB 4: VIRAL MANAGER ===
+with tab4:
+    col1, col2 = st.columns(2, gap="large")
+    
+    with col1:
+        st.markdown("### 📋 Content Details")
+        
+        topic = st.text_input(
+            "Topic",
+            placeholder="Example: How to make perfect coffee",
+            key="viral_topic"
+        )
+        
+        platform = st.multiselect(
+            "Platforms",
+            ["YouTube", "Instagram", "TikTok", "Twitter/X", "LinkedIn"],
+            default=["YouTube"]
+        )
+        
+        audience = st.selectbox(
+            "Target Audience",
+            ["General Public", "Young Adults (18-25)", "Professionals", 
+             "Tech Enthusiasts", "Entrepreneurs"]
+        )
+        
+        tone = st.selectbox(
+            "Content Tone",
+            ["Exciting/Energetic", "Educational", "Funny", "Inspirational", "Professional"]
+        )
+        
+        viral_btn = st.button("🚀 Generate Strategy", type="primary", use_container_width=True)
+    
+    with col2:
+        st.markdown("### 💎 Viral Package")
+        
+>>>>>>> b8635aa8bf5a929da6732146c8eab2c484d17ff2
         if viral_btn:
             if topic.strip():
                 with st.spinner("🤖 Creating strategy..."):
